@@ -1,0 +1,6 @@
+{
+  "apiKey": "sk-REPLACE_ME",
+  "model": "gpt-5.4",
+  "endpoint": "https://api.openai.com/v1/responses",
+  "timeoutSeconds": 20
+}
