@@ -7,7 +7,9 @@ namespace AIInterrogation
         [SerializeField] private AudioClip folderOpenClip;
         [SerializeField] private AudioClip[] folderOpenVariants;
         [SerializeField] private string folderOpenResourcePath = "Audio/folder_open";
+        [SerializeField] private string briefcaseOpenResourcePath = "Audio/briefcase_open";
         [SerializeField, Range(0f, 1f)] private float folderOpenVolume = 0.32f;
+        [SerializeField, Range(0f, 1f)] private float briefcaseOpenVolume = 0.26f;
         [SerializeField, Range(0f, 0.25f)] private float folderOpenPitchVariation = 0.07f;
 
         private AudioSource ambienceSource;
@@ -23,10 +25,12 @@ namespace AIInterrogation
         private AudioClip tableSlam;
         private AudioClip finalSting;
         private AudioClip terminalBeep;
+        private AudioClip briefcaseOpen;
 
         private float nextTypeClickTime;
         private float nextLampFlickerTime;
         private float nextFolderOpenTime;
+        private float nextBriefcaseOpenTime;
 
         public void Initialize()
         {
@@ -43,6 +47,7 @@ namespace AIInterrogation
             tableSlam = Resources.Load<AudioClip>("Audio/table_slam");
             finalSting = Resources.Load<AudioClip>("Audio/final_sting");
             terminalBeep = Resources.Load<AudioClip>("Audio/terminal_beep");
+            briefcaseOpen = Resources.Load<AudioClip>(briefcaseOpenResourcePath);
             if (folderOpenClip == null && !string.IsNullOrWhiteSpace(folderOpenResourcePath))
             {
                 folderOpenClip = Resources.Load<AudioClip>(folderOpenResourcePath);
@@ -93,6 +98,18 @@ namespace AIInterrogation
             var clip = ChooseFolderOpenClip();
             var pitch = Random.Range(1f - folderOpenPitchVariation, 1f + folderOpenPitchVariation);
             Play(uiSource, clip, folderOpenVolume, pitch);
+        }
+
+        public void PlayBriefcaseOpen()
+        {
+            if (Time.unscaledTime < nextBriefcaseOpenTime)
+            {
+                return;
+            }
+
+            nextBriefcaseOpenTime = Time.unscaledTime + 0.55f;
+            var clip = briefcaseOpen != null ? briefcaseOpen : ChooseFolderOpenClip();
+            Play(uiSource, clip, briefcaseOpenVolume, Random.Range(0.96f, 1.04f));
         }
 
         public void PlayTerminalBeep()

@@ -20,7 +20,7 @@ namespace AIInterrogation
         private const string ResolutionPrefKey = "AIInterrogation.ResolutionIndex";
         private const string FullscreenPrefKey = "AIInterrogation.Fullscreen";
         private const float MenuVideoPrepareTimeoutSeconds = 2.5f;
-        private static readonly bool MainMenuVideoEnabled = false;
+        private static readonly bool MainMenuVideoEnabled = true;
 
         private readonly List<string> logLines = new List<string>();
         private readonly Vector2Int[] supportedResolutions =
@@ -1194,7 +1194,7 @@ namespace AIInterrogation
                 return;
             }
 
-            audioController?.PlayFolderOpen();
+            audioController?.PlayBriefcaseOpen();
             ShowEvidenceSecondRoom(true);
         }
 
