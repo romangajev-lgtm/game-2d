@@ -440,23 +440,25 @@ namespace AIInterrogation
 
         private void ShowMenuOpenState()
         {
-            if (menuVideoPlayer != null && menuVideoPlayer.clip != null)
+            if (menuVideoPlayer != null)
             {
-                menuClosedImage.gameObject.SetActive(false);
-                menuOpenImage.gameObject.SetActive(false);
-                menuVideoImage.gameObject.SetActive(true);
-                menuVideoImage.color = Color.white;
-                if (menuVideoPlayer.isPrepared && menuVideoPlayer.frameCount > 1)
-                {
-                    menuVideoPlayer.Pause();
-                    menuVideoPlayer.frame = (long)menuVideoPlayer.frameCount - 1;
-                }
+                menuVideoPlayer.Pause();
             }
-            else
+
+            if (menuVideoImage != null)
+            {
+                menuVideoImage.gameObject.SetActive(false);
+            }
+
+            if (menuClosedImage != null)
             {
                 menuClosedImage.gameObject.SetActive(true);
-                menuOpenImage.gameObject.SetActive(true);
                 menuClosedImage.color = new Color(1f, 1f, 1f, 0f);
+            }
+
+            if (menuOpenImage != null)
+            {
+                menuOpenImage.gameObject.SetActive(true);
                 menuOpenImage.color = Color.white;
             }
 
