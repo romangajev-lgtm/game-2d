@@ -7,6 +7,7 @@ namespace AIInterrogation
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            Application.runInBackground = true;
             if (Object.FindObjectOfType<GameFlowController>() != null)
             {
                 Object.FindObjectOfType<GameFlowController>().InitializeRuntime();

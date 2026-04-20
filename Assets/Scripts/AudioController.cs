@@ -48,8 +48,8 @@ namespace AIInterrogation
                 folderOpenClip = Resources.Load<AudioClip>(folderOpenResourcePath);
             }
 
-            ambienceSource = CreateSource("Audio Ambience", 0.22f, true);
-            loopAccentSource = CreateSource("Audio Lamp Buzz", 0.10f, true);
+            ambienceSource = CreateSource("Audio Ambience", 0.16f, true);
+            loopAccentSource = CreateSource("Audio Lamp Buzz", 0.035f, true);
             sfxSource = CreateSource("Audio SFX", 0.55f, false);
             uiSource = CreateSource("Audio UI", 0.28f, false);
 
@@ -127,8 +127,8 @@ namespace AIInterrogation
                 return;
             }
 
-            nextLampFlickerTime = Time.unscaledTime + Random.Range(3.2f, 7.5f);
-            Play(uiSource, lampBuzz, 0.055f, Random.Range(1.2f, 1.55f));
+            nextLampFlickerTime = Time.unscaledTime + Random.Range(5.0f, 11.0f);
+            Play(uiSource, lampBuzz, 0.018f, Random.Range(0.95f, 1.08f));
         }
 
         private AudioSource CreateSource(string sourceName, float volume, bool loop)

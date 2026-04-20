@@ -19,6 +19,8 @@ namespace AIInterrogation
 
         private const string ResolutionPrefKey = "AIInterrogation.ResolutionIndex";
         private const string FullscreenPrefKey = "AIInterrogation.Fullscreen";
+        private const float MenuVideoPrepareTimeoutSeconds = 2.5f;
+        private static readonly bool MainMenuVideoEnabled = false;
 
         private readonly List<string> logLines = new List<string>();
         private readonly Vector2Int[] supportedResolutions =
@@ -87,7 +89,7 @@ namespace AIInterrogation
         {
             flow = flowController;
             audioController = audio;
-            monoFont = Font.CreateDynamicFontFromOSFont(new[] { "Consolas", "Courier New", "Lucida Console", "monospace" }, 15);
+            monoFont = Resources.GetBuiltinResource<Font>("Arial.ttf");
             CreateEventSystem();
             CreateCanvas();
             CreateMainMenuPanel();
@@ -116,9 +118,10 @@ namespace AIInterrogation
                 StopCoroutine(menuOpenRoutine);
             }
 
-            if (menuIntroPlayed)
+            if (menuIntroPlayed || !MainMenuVideoEnabled)
             {
                 ShowMenuOpenState();
+                menuIntroPlayed = true;
                 return;
             }
 
@@ -316,6 +319,16 @@ namespace AIInterrogation
                 yield break;
             }
 
+            yield return AnimateStaticMenuOpen();
+        }
+
+        private IEnumerator AnimateStaticMenuOpen()
+        {
+            if (menuVideoImage != null)
+            {
+                menuVideoImage.gameObject.SetActive(false);
+            }
+
             menuClosedImage.gameObject.SetActive(true);
             menuOpenImage.gameObject.SetActive(true);
             menuClosedImage.color = Color.white;
@@ -371,8 +384,18 @@ namespace AIInterrogation
             menuVideoPlayer.frame = 0;
             menuVideoPlayer.Prepare();
 
+            var prepareElapsed = 0f;
             while (!menuVideoPlayer.isPrepared)
             {
+                prepareElapsed += Time.unscaledDeltaTime;
+                if (prepareElapsed >= MenuVideoPrepareTimeoutSeconds)
+                {
+                    Debug.LogWarning("Main menu video prepare timed out. Falling back to static menu images.");
+                    menuVideoPlayer.Stop();
+                    yield return AnimateStaticMenuOpen();
+                    yield break;
+                }
+
                 yield return null;
             }
 
@@ -589,7 +612,11 @@ namespace AIInterrogation
 
             menuClosedImage = CreateFullscreenImage("Menu Closed Frame", mainMenuPanel.transform, "Art/menu_closed");
             menuOpenImage = CreateFullscreenImage("Menu Open Frame", mainMenuPanel.transform, "Art/menu_open");
-            menuVideoImage = CreateFullscreenVideo("Menu Folder Video", mainMenuPanel.transform, "Video/start");
+            if (MainMenuVideoEnabled)
+            {
+                menuVideoImage = CreateFullscreenVideo("Menu Folder Video", mainMenuPanel.transform, "Video/start");
+            }
+
             CreateClosedFolderTitle();
 
             var shade = new GameObject("Menu Dark Edge");
