@@ -14,12 +14,14 @@ namespace AIInterrogation
         {
             FirstRoom,
             SecondRoom,
-            BriefcaseOpen
+            BriefcaseOpen,
+            PhotoZoomed
         }
 
         private const string ResolutionPrefKey = "AIInterrogation.ResolutionIndex";
         private const string FullscreenPrefKey = "AIInterrogation.Fullscreen";
         private const float MenuVideoPrepareTimeoutSeconds = 2.5f;
+        private const float EvidenceVideoPrepareTimeoutSeconds = 2.5f;
         private static readonly bool MainMenuVideoEnabled = true;
 
         private readonly List<string> logLines = new List<string>();
@@ -68,18 +70,31 @@ namespace AIInterrogation
         private Button evidenceBackButton;
         private Button evidenceDoorButton;
         private Button evidenceBriefcaseButton;
+        private Button evidencePhotoButton;
+        private Button evidenceDocumentButton;
+        private Button evidencePhotoBackButton;
         private ScrollRect scrollRect;
         private RectTransform terminalRect;
         private float terminalShakeTime;
         private int lastSubmitFrame = -1;
         private Vector2 terminalBasePosition;
+        private Coroutine evidenceVideoRoutine;
         private Image evidenceRoomImage;
+        private RawImage evidenceVideoImage;
+        private VideoPlayer evidenceVideoPlayer;
+        private RenderTexture evidenceVideoTexture;
         private Sprite evidenceRoomOneSprite;
         private Sprite evidenceRoomOneDoorOpenSprite;
         private Sprite evidenceRoomTwoSprite;
         private Sprite evidenceRoomTwoBriefcaseOpenSprite;
+        private Sprite evidenceRoomTwoPhotoZoomedSprite;
+        private Sprite evidenceRoomTwoPhotoHoverSprite;
+        private Sprite evidenceRoomTwoDocumentHoverSprite;
+        private VideoClip evidencePhotoZoomInClip;
+        private VideoClip evidencePhotoZoomOutClip;
         private EvidenceRoomState evidenceRoomState;
         private bool menuIntroPlayed;
+        private bool evidenceVideoPlaying;
         private bool selectedFullscreen;
         private int selectedResolutionIndex;
 
@@ -109,6 +124,7 @@ namespace AIInterrogation
             briefingPanel.SetActive(false);
             terminalPanel.SetActive(false);
             finalPanel.SetActive(false);
+            StopEvidenceVideoPlayback();
             evidencePanel.SetActive(false);
             quickMenuButton.SetActive(false);
             evidenceAccessButton.SetActive(false);
@@ -197,11 +213,13 @@ namespace AIInterrogation
             evidenceAccessButton.SetActive(false);
             evidencePanel.SetActive(true);
             SetInputLocked(true);
+            StopEvidenceVideoPlayback();
             ShowEvidenceFirstRoom();
         }
 
         public void HideEvidenceRoomToInterrogation()
         {
+            StopEvidenceVideoPlayback();
             evidencePanel.SetActive(false);
             terminalPanel.SetActive(true);
             quickMenuButton.SetActive(true);
@@ -1043,6 +1061,11 @@ namespace AIInterrogation
             evidenceRoomOneDoorOpenSprite = LoadSprite("Evidence/room_1_door_open");
             evidenceRoomTwoSprite = LoadSprite("Evidence/room_2");
             evidenceRoomTwoBriefcaseOpenSprite = LoadSprite("Evidence/room_2_briefcase_open");
+            evidenceRoomTwoPhotoZoomedSprite = LoadSprite("Evidence/room_2_photo_zoomed");
+            evidenceRoomTwoPhotoHoverSprite = LoadSprite("Evidence/room_2_photo_hover");
+            evidenceRoomTwoDocumentHoverSprite = LoadSprite("Evidence/room_2_document_hover");
+            evidencePhotoZoomInClip = Resources.Load<VideoClip>("Evidence/photo_zoom_in");
+            evidencePhotoZoomOutClip = Resources.Load<VideoClip>("Evidence/photo_zoom_out");
 
             evidenceRoomImage = CreateFullscreenImage("Evidence Room Image", evidencePanel.transform, "Evidence/room_1");
             evidenceRoomImage.preserveAspect = true;
@@ -1056,6 +1079,8 @@ namespace AIInterrogation
             shadeImage.color = new Color(0f, 0f, 0f, 0.08f);
             RuntimeMaterialFactory.ApplyTo(shadeImage);
             shadeImage.raycastTarget = false;
+
+            CreateEvidenceVideoLayer();
 
             evidenceBackButton = CreateButton("<", evidencePanel.transform, new Vector2(0.024f, 0.90f), new Vector2(0.105f, 0.972f));
             evidenceBackButton.onClick.AddListener(HandleEvidenceBack);
@@ -1077,6 +1102,29 @@ namespace AIInterrogation
             briefcaseHotspot.PointerReleased = () => SetEvidenceHint("портфель открыт");
             briefcaseHotspot.PointerClicked = OpenBriefcaseEvidence;
 
+            evidenceDocumentButton = CreateEvidenceHotspot("Document Hotspot", new Vector2(0.29f, 0.20f), new Vector2(0.56f, 0.63f));
+            var documentHotspot = evidenceDocumentButton.gameObject.AddComponent<EvidenceHotspot>();
+            documentHotspot.PointerEntered = HandleDocumentHoverEnter;
+            documentHotspot.PointerExited = HandleDocumentHoverExit;
+
+            evidencePhotoButton = CreateEvidenceHotspot("Photo Hotspot", new Vector2(0.48f, 0.18f), new Vector2(0.70f, 0.48f));
+            var photoHotspot = evidencePhotoButton.gameObject.AddComponent<EvidenceHotspot>();
+            photoHotspot.PointerEntered = HandlePhotoHoverEnter;
+            photoHotspot.PointerExited = HandlePhotoHoverExit;
+            photoHotspot.PointerPressed = () =>
+            {
+                if (CanUseBriefcaseDetails())
+                {
+                    SetEvidenceHint("изучаю фото...");
+                }
+            };
+            photoHotspot.PointerClicked = OpenPhotoEvidence;
+
+            evidencePhotoBackButton = CreateButton("<", evidencePanel.transform, new Vector2(0.024f, 0.90f), new Vector2(0.105f, 0.972f));
+            evidencePhotoBackButton.onClick.AddListener(ClosePhotoEvidence);
+            RestyleEvidenceButton(evidencePhotoBackButton, "<");
+            evidencePhotoBackButton.gameObject.SetActive(false);
+
             evidenceHintText = CreateText("Evidence Hint", evidencePanel.transform, 18, new Color(0.95f, 0.72f, 0.36f, 0.92f), TextAnchor.LowerCenter);
             var hintRect = evidenceHintText.GetComponent<RectTransform>();
             hintRect.anchorMin = new Vector2(0.18f, 0.03f);
@@ -1085,6 +1133,44 @@ namespace AIInterrogation
             hintRect.offsetMax = Vector2.zero;
 
             evidencePanel.SetActive(false);
+        }
+
+        private void CreateEvidenceVideoLayer()
+        {
+            var obj = new GameObject("Evidence Transition Video");
+            obj.transform.SetParent(evidencePanel.transform, false);
+            var rect = obj.AddComponent<RectTransform>();
+            rect.StretchToParent();
+
+            evidenceVideoImage = obj.AddComponent<RawImage>();
+            RuntimeMaterialFactory.ApplyTo(evidenceVideoImage);
+            evidenceVideoImage.color = Color.white;
+            evidenceVideoImage.raycastTarget = false;
+
+            var aspect = obj.AddComponent<AspectRatioFitter>();
+            aspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            aspect.aspectRatio = 16f / 9f;
+
+            evidenceVideoTexture = new RenderTexture(1920, 1080, 0, RenderTextureFormat.ARGB32)
+            {
+                name = "Evidence Transition Video Texture"
+            };
+            evidenceVideoTexture.Create();
+            evidenceVideoImage.texture = evidenceVideoTexture;
+            evidenceVideoImage.gameObject.SetActive(false);
+
+            var videoObject = new GameObject("Evidence Transition Video Player");
+            videoObject.transform.SetParent(evidencePanel.transform, false);
+            evidenceVideoPlayer = videoObject.AddComponent<VideoPlayer>();
+            evidenceVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            evidenceVideoPlayer.targetTexture = evidenceVideoTexture;
+            evidenceVideoPlayer.playOnAwake = false;
+            evidenceVideoPlayer.isLooping = false;
+            evidenceVideoPlayer.waitForFirstFrame = true;
+            evidenceVideoPlayer.skipOnDrop = false;
+            evidenceVideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
+            evidenceVideoPlayer.aspectRatio = VideoAspectRatio.FitInside;
+            evidenceVideoPlayer.sendFrameReadyEvents = false;
         }
 
         private Button CreateEvidenceHotspot(string name, Vector2 anchorMin, Vector2 anchorMax)
@@ -1139,19 +1225,29 @@ namespace AIInterrogation
 
         private void ShowEvidenceFirstRoom()
         {
+            StopEvidenceVideoPlayback();
             evidenceRoomState = EvidenceRoomState.FirstRoom;
             SetEvidenceSprite(evidenceRoomOneSprite);
             evidenceDoorButton.gameObject.SetActive(true);
             evidenceBriefcaseButton.gameObject.SetActive(false);
+            evidencePhotoButton.gameObject.SetActive(false);
+            evidenceDocumentButton.gameObject.SetActive(false);
+            evidenceBackButton.gameObject.SetActive(true);
+            evidencePhotoBackButton.gameObject.SetActive(false);
             SetEvidenceHint("доступ к уликам открыт. наведите на дверь");
         }
 
         private void ShowEvidenceSecondRoom(bool briefcaseOpen)
         {
+            StopEvidenceVideoPlayback();
             evidenceRoomState = briefcaseOpen ? EvidenceRoomState.BriefcaseOpen : EvidenceRoomState.SecondRoom;
             SetEvidenceSprite(briefcaseOpen ? evidenceRoomTwoBriefcaseOpenSprite : evidenceRoomTwoSprite);
             evidenceDoorButton.gameObject.SetActive(false);
             evidenceBriefcaseButton.gameObject.SetActive(!briefcaseOpen);
+            evidencePhotoButton.gameObject.SetActive(briefcaseOpen);
+            evidenceDocumentButton.gameObject.SetActive(briefcaseOpen);
+            evidenceBackButton.gameObject.SetActive(true);
+            evidencePhotoBackButton.gameObject.SetActive(false);
             SetEvidenceHint(briefcaseOpen ? "портфель открыт" : "осмотрите комнату");
         }
 
@@ -1201,8 +1297,197 @@ namespace AIInterrogation
             ShowEvidenceSecondRoom(true);
         }
 
+        private void HandlePhotoHoverEnter()
+        {
+            if (!CanUseBriefcaseDetails())
+            {
+                return;
+            }
+
+            SetEvidenceSprite(evidenceRoomTwoPhotoHoverSprite);
+            SetEvidenceHint("фотография. нажмите, чтобы приблизить");
+        }
+
+        private void HandlePhotoHoverExit()
+        {
+            if (!CanUseBriefcaseDetails())
+            {
+                return;
+            }
+
+            SetEvidenceSprite(evidenceRoomTwoBriefcaseOpenSprite);
+            SetEvidenceHint("портфель открыт");
+        }
+
+        private void HandleDocumentHoverEnter()
+        {
+            if (!CanUseBriefcaseDetails())
+            {
+                return;
+            }
+
+            SetEvidenceSprite(evidenceRoomTwoDocumentHoverSprite);
+            SetEvidenceHint("документ");
+        }
+
+        private void HandleDocumentHoverExit()
+        {
+            if (!CanUseBriefcaseDetails())
+            {
+                return;
+            }
+
+            SetEvidenceSprite(evidenceRoomTwoBriefcaseOpenSprite);
+            SetEvidenceHint("портфель открыт");
+        }
+
+        private void OpenPhotoEvidence()
+        {
+            if (!CanUseBriefcaseDetails())
+            {
+                return;
+            }
+
+            audioController?.PlaySubmit();
+            StartEvidenceVideo(evidencePhotoZoomInClip, EvidenceRoomState.PhotoZoomed, evidenceRoomTwoPhotoZoomedSprite, "фотография");
+        }
+
+        private void ClosePhotoEvidence()
+        {
+            if (evidenceRoomState != EvidenceRoomState.PhotoZoomed || evidenceVideoPlaying)
+            {
+                return;
+            }
+
+            audioController?.PlaySubmit();
+            StartEvidenceVideo(evidencePhotoZoomOutClip, EvidenceRoomState.BriefcaseOpen, evidenceRoomTwoBriefcaseOpenSprite, "портфель открыт");
+        }
+
+        private bool CanUseBriefcaseDetails()
+        {
+            return evidenceRoomState == EvidenceRoomState.BriefcaseOpen && !evidenceVideoPlaying;
+        }
+
+        private void StartEvidenceVideo(VideoClip clip, EvidenceRoomState finalState, Sprite finalSprite, string finalHint)
+        {
+            if (evidenceVideoPlaying)
+            {
+                return;
+            }
+
+            if (clip == null || evidenceVideoPlayer == null || evidenceVideoImage == null)
+            {
+                ApplyEvidenceVideoResult(finalState, finalSprite, finalHint);
+                return;
+            }
+
+            evidenceVideoRoutine = StartCoroutine(PlayEvidenceVideo(clip, finalState, finalSprite, finalHint));
+        }
+
+        private IEnumerator PlayEvidenceVideo(VideoClip clip, EvidenceRoomState finalState, Sprite finalSprite, string finalHint)
+        {
+            evidenceVideoPlaying = true;
+            SetEvidenceInteractionEnabled(false);
+            SetEvidenceHint(string.Empty);
+
+            evidenceVideoImage.gameObject.SetActive(false);
+            evidenceVideoPlayer.Stop();
+            evidenceVideoPlayer.clip = clip;
+            evidenceVideoPlayer.time = 0d;
+            evidenceVideoPlayer.frame = 0;
+            evidenceVideoPlayer.Prepare();
+
+            var prepareElapsed = 0f;
+            while (!evidenceVideoPlayer.isPrepared)
+            {
+                prepareElapsed += Time.unscaledDeltaTime;
+                if (prepareElapsed >= EvidenceVideoPrepareTimeoutSeconds)
+                {
+                    Debug.LogWarning($"Evidence video prepare timed out: {clip.name}.");
+                    evidenceVideoPlayer.Stop();
+                    evidenceVideoPlaying = false;
+                    evidenceVideoRoutine = null;
+                    ApplyEvidenceVideoResult(finalState, finalSprite, finalHint);
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            evidenceVideoPlayer.Play();
+            evidenceVideoImage.gameObject.SetActive(true);
+
+            var playbackLimit = clip.length > 0.01d ? (float)clip.length + 0.35f : 5f;
+            var playbackElapsed = 0f;
+            while (playbackElapsed < playbackLimit)
+            {
+                playbackElapsed += Time.unscaledDeltaTime;
+                if (evidenceVideoPlayer.time >= clip.length - 0.03d && !evidenceVideoPlayer.isPlaying)
+                {
+                    break;
+                }
+
+                yield return null;
+            }
+
+            evidenceVideoPlayer.Stop();
+            evidenceVideoImage.gameObject.SetActive(false);
+            evidenceVideoPlaying = false;
+            evidenceVideoRoutine = null;
+            ApplyEvidenceVideoResult(finalState, finalSprite, finalHint);
+        }
+
+        private void ApplyEvidenceVideoResult(EvidenceRoomState finalState, Sprite finalSprite, string finalHint)
+        {
+            evidenceRoomState = finalState;
+            SetEvidenceSprite(finalSprite);
+            SetEvidenceHint(finalHint);
+            SetEvidenceInteractionEnabled(true);
+        }
+
+        private void StopEvidenceVideoPlayback()
+        {
+            evidenceVideoPlaying = false;
+
+            if (evidenceVideoRoutine != null)
+            {
+                StopCoroutine(evidenceVideoRoutine);
+                evidenceVideoRoutine = null;
+            }
+
+            if (evidenceVideoPlayer != null)
+            {
+                evidenceVideoPlayer.Stop();
+            }
+
+            if (evidenceVideoImage != null)
+            {
+                evidenceVideoImage.gameObject.SetActive(false);
+            }
+        }
+
+        private void SetEvidenceInteractionEnabled(bool enabled)
+        {
+            var inFirstRoom = enabled && evidenceRoomState == EvidenceRoomState.FirstRoom;
+            var inSecondRoom = enabled && evidenceRoomState == EvidenceRoomState.SecondRoom;
+            var inBriefcase = enabled && evidenceRoomState == EvidenceRoomState.BriefcaseOpen;
+            var inPhoto = enabled && evidenceRoomState == EvidenceRoomState.PhotoZoomed;
+
+            evidenceDoorButton.gameObject.SetActive(inFirstRoom);
+            evidenceBriefcaseButton.gameObject.SetActive(inSecondRoom);
+            evidencePhotoButton.gameObject.SetActive(inBriefcase);
+            evidenceDocumentButton.gameObject.SetActive(inBriefcase);
+            evidenceBackButton.gameObject.SetActive(enabled && !inPhoto);
+            evidencePhotoBackButton.gameObject.SetActive(inPhoto);
+        }
+
         private void HandleEvidenceBack()
         {
+            if (evidenceVideoPlaying)
+            {
+                return;
+            }
+
             audioController?.PlaySubmit();
             HideEvidenceRoomToInterrogation();
         }
