@@ -1162,7 +1162,7 @@ namespace AIInterrogation
 
             SetEvidenceSprite(evidenceRoomOneDoorOpenSprite);
             SetEvidenceHint("дверь открыта. нажмите, чтобы пройти");
-            audioController?.PlayTerminalBeep();
+            audioController?.PlayDoorHover();
         }
 
         private void HandleDoorHoverExit()
@@ -1174,6 +1174,7 @@ namespace AIInterrogation
 
             SetEvidenceSprite(evidenceRoomOneSprite);
             SetEvidenceHint("доступ к уликам открыт. наведите на дверь");
+            audioController?.PlayDoorClose();
         }
 
         private void EnterSecondEvidenceRoom()

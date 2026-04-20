@@ -10,6 +10,8 @@ namespace AIInterrogation
         [SerializeField] private string briefcaseOpenResourcePath = "Audio/briefcase_open";
         [SerializeField, Range(0f, 1f)] private float folderOpenVolume = 0.32f;
         [SerializeField, Range(0f, 1f)] private float briefcaseOpenVolume = 0.26f;
+        [SerializeField, Range(0f, 1f)] private float doorHoverVolume = 0.30f;
+        [SerializeField, Range(0f, 1f)] private float doorCloseVolume = 0.26f;
         [SerializeField, Range(0f, 0.25f)] private float folderOpenPitchVariation = 0.07f;
 
         private AudioSource ambienceSource;
@@ -26,11 +28,15 @@ namespace AIInterrogation
         private AudioClip finalSting;
         private AudioClip terminalBeep;
         private AudioClip briefcaseOpen;
+        private AudioClip[] doorHoverClips;
+        private AudioClip[] doorCloseClips;
 
         private float nextTypeClickTime;
         private float nextLampFlickerTime;
         private float nextFolderOpenTime;
         private float nextBriefcaseOpenTime;
+        private int nextDoorHoverClipIndex;
+        private int nextDoorCloseClipIndex;
 
         public void Initialize()
         {
@@ -48,6 +54,8 @@ namespace AIInterrogation
             finalSting = Resources.Load<AudioClip>("Audio/final_sting");
             terminalBeep = Resources.Load<AudioClip>("Audio/terminal_beep");
             briefcaseOpen = Resources.Load<AudioClip>(briefcaseOpenResourcePath);
+            doorHoverClips = LoadClips("Audio/door1", "Audio/door2");
+            doorCloseClips = LoadClips("Audio/doorClose1", "Audio/doorClose2");
             if (folderOpenClip == null && !string.IsNullOrWhiteSpace(folderOpenResourcePath))
             {
                 folderOpenClip = Resources.Load<AudioClip>(folderOpenResourcePath);
@@ -112,6 +120,16 @@ namespace AIInterrogation
             Play(uiSource, clip, briefcaseOpenVolume, Random.Range(0.96f, 1.04f));
         }
 
+        public void PlayDoorHover()
+        {
+            PlayAlternating(uiSource, doorHoverClips, ref nextDoorHoverClipIndex, doorHoverVolume);
+        }
+
+        public void PlayDoorClose()
+        {
+            PlayAlternating(uiSource, doorCloseClips, ref nextDoorCloseClipIndex, doorCloseVolume);
+        }
+
         public void PlayTerminalBeep()
         {
             Play(uiSource, terminalBeep, 0.20f, Random.Range(0.92f, 1.08f));
@@ -174,6 +192,37 @@ namespace AIInterrogation
             }
 
             return folderOpenClip;
+        }
+
+        private static AudioClip[] LoadClips(params string[] resourcePaths)
+        {
+            var clips = new AudioClip[resourcePaths.Length];
+            for (var i = 0; i < resourcePaths.Length; i++)
+            {
+                clips[i] = Resources.Load<AudioClip>(resourcePaths[i]);
+            }
+
+            return clips;
+        }
+
+        private static void PlayAlternating(AudioSource source, AudioClip[] clips, ref int nextIndex, float volume)
+        {
+            if (source == null || clips == null || clips.Length == 0)
+            {
+                return;
+            }
+
+            for (var attempts = 0; attempts < clips.Length; attempts++)
+            {
+                var index = Mathf.Abs(nextIndex) % clips.Length;
+                nextIndex = (nextIndex + 1) % clips.Length;
+                var clip = clips[index];
+                if (clip != null)
+                {
+                    Play(source, clip, volume, Random.Range(0.97f, 1.03f));
+                    return;
+                }
+            }
         }
 
         private static void Play(AudioSource source, AudioClip clip, float volume, float pitch)
