@@ -1147,10 +1147,6 @@ namespace AIInterrogation
             evidenceVideoImage.color = Color.white;
             evidenceVideoImage.raycastTarget = false;
 
-            var aspect = obj.AddComponent<AspectRatioFitter>();
-            aspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-            aspect.aspectRatio = 16f / 9f;
-
             evidenceVideoTexture = new RenderTexture(1920, 1080, 0, RenderTextureFormat.ARGB32)
             {
                 name = "Evidence Transition Video Texture"
@@ -1169,7 +1165,7 @@ namespace AIInterrogation
             evidenceVideoPlayer.waitForFirstFrame = true;
             evidenceVideoPlayer.skipOnDrop = false;
             evidenceVideoPlayer.audioOutputMode = VideoAudioOutputMode.None;
-            evidenceVideoPlayer.aspectRatio = VideoAspectRatio.FitInside;
+            evidenceVideoPlayer.aspectRatio = VideoAspectRatio.FitOutside;
             evidenceVideoPlayer.sendFrameReadyEvents = false;
         }
 
