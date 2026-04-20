@@ -4,6 +4,14 @@ Unity MVP for a static 2D psychological interrogation game. The runtime scene is
 
 ## Run
 
+### Windows build
+
+Download `Releases/AI-Interrogation-Windows.zip`, extract the archive, and run `AI Interrogation.exe` from the extracted folder.
+
+Do not run the exe from inside the zip archive. Extract the whole folder first, because Unity also needs `AI Interrogation_Data`, `UnityPlayer.dll`, and `MonoBleedingEdge`.
+
+### Unity editor
+
 1. Open this folder in Unity Hub as a Unity project.
 2. Open `Assets/Scenes/Interrogation.unity`.
 3. Press Play.
